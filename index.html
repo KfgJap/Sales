@@ -1,0 +1,156 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { slides } from "./slides";
+
+export default function App() {
+  const [i, setI] = useState(0);
+  const [dir, setDir] = useState<"next" | "prev">("next");
+  const [menu, setMenu] = useState(false);
+  const touch = useRef<number | null>(null);
+  const last = slides.length - 1;
+
+  const go = useCallback(
+    (n: number) => {
+      const t = Math.max(0, Math.min(last, n));
+      setI((cur) => {
+        if (t !== cur) setDir(t > cur ? "next" : "prev");
+        return t;
+      });
+    },
+    [last]
+  );
+
+  const toggleFs = useCallback(() => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen?.();
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (el.tagName === "INPUT") return;
+      if (["ArrowRight", "PageDown", " "].includes(e.key)) {
+        if (e.key === " " && el.tagName === "BUTTON") return;
+        e.preventDefault();
+        setI((c) => {
+          const t = Math.min(last, c + 1);
+          if (t !== c) setDir("next");
+          return t;
+        });
+      } else if (["ArrowLeft", "PageUp"].includes(e.key)) {
+        e.preventDefault();
+        setI((c) => {
+          const t = Math.max(0, c - 1);
+          if (t !== c) setDir("prev");
+          return t;
+        });
+      } else if (e.key === "Home") go(0);
+      else if (e.key === "End") go(last);
+      else if (e.key === "f" || e.key === "F" || e.key === "а" || e.key === "А") toggleFs();
+      else if (e.key === "Escape") setMenu(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [go, last, toggleFs]);
+
+  const progress = ((i + 1) / slides.length) * 100;
+  const btn =
+    "flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white";
+
+  return (
+    <div
+      className="relative flex h-full flex-col bg-gradient-to-br from-indigo-50 via-slate-50 to-sky-100 text-slate-900"
+      onTouchStart={(e) => (touch.current = e.touches[0].clientX)}
+      onTouchEnd={(e) => {
+        if (touch.current === null) return;
+        const dx = e.changedTouches[0].clientX - touch.current;
+        if (Math.abs(dx) > 70) go(i + (dx < 0 ? 1 : -1));
+        touch.current = null;
+      }}
+    >
+      <div className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-indigo-200/40 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-sky-200/50 blur-3xl" />
+
+      {/* прогресс */}
+      <div className="relative h-1.5 w-full bg-slate-200/70">
+        <div
+          className="h-full bg-gradient-to-r from-indigo-500 to-sky-500 transition-all duration-500"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      {/* слайд */}
+      <main className="relative min-h-0 flex-1 overflow-y-auto">
+        <div key={i} className={`min-h-full ${dir === "next" ? "anim-next" : "anim-prev"}`}>
+          {slides[i].el}
+        </div>
+      </main>
+
+      {/* меню слайдов */}
+      {menu && (
+        <div
+          className="absolute inset-0 z-20 flex items-end justify-center bg-slate-900/30 p-4 backdrop-blur-sm"
+          onClick={() => setMenu(false)}
+        >
+          <div
+            className="rise mb-16 max-h-[70%] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-3 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {slides.map((s, k) => (
+              <button
+                key={s.name}
+                onClick={() => {
+                  go(k);
+                  setMenu(false);
+                }}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-slate-100 ${
+                  k === i ? "bg-indigo-50 font-semibold text-indigo-700" : "text-slate-700"
+                }`}
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-bold">
+                  {k + 1}
+                </span>
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* панель управления */}
+      <footer className="relative z-10 flex items-center justify-between gap-3 px-4 py-3 md:px-8">
+        <button onClick={() => setMenu((m) => !m)} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50">
+          ☰ <span className="hidden sm:inline">Слайды</span>
+        </button>
+
+        <div className="hidden items-center gap-1.5 md:flex">
+          {slides.map((s, k) => (
+            <button
+              key={s.name}
+              aria-label={s.name}
+              title={s.name}
+              onClick={() => go(k)}
+              className={`h-2.5 rounded-full transition-all ${
+                k === i ? "w-7 bg-indigo-600" : "w-2.5 bg-slate-300 hover:bg-slate-400"
+              }`}
+            />
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="mr-1 text-sm font-semibold tabular-nums text-slate-500">
+            {i + 1} / {slides.length}
+          </span>
+          <button className={btn} onClick={toggleFs} aria-label="Полный экран" title="Полный экран (F)">
+            ⛶
+          </button>
+          <button className={btn} onClick={() => go(i - 1)} disabled={i === 0} aria-label="Назад">
+            ←
+          </button>
+          <button className={btn} onClick={() => go(i + 1)} disabled={i === last} aria-label="Вперёд">
+            →
+          </button>
+        </div>
+      </footer>
+    </div>
+  );
+}
